@@ -4,6 +4,8 @@ import requests
 import json
 MAX = 5
 MMAX = 10000
+INF = 99999
+AVG = 5
 problemURL = "https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/competition-imgs/2021kakao/problem1_day-1.json"
 # 만약에 자전거를 빌려야하는데 자전거가 없다
 
@@ -14,11 +16,9 @@ class truck:
     x: int = None
     idx: int = None
 
-
 class pos:
-    y: int
-    x: int
-
+    y: int = None
+    x: int = None
 
 class Simulate:
     status: str = None
@@ -36,19 +36,18 @@ class Land:
     eId : int
     time : int
 
-
+idxM = [pos() for j in range(MAX*MAX)]
 # static variable
 # BASE URL
 URL = 'https://kox947ka1a.execute-api.ap-northeast-2.amazonaws.com/prod/users'
 dx = [1, 0, -1, 0]
 dy = [0, 1, 0, -1]
 mp = [[0 for i in range(MAX)] for j in range(MAX)]
-idxM = [pos for j in range(MAX*MAX)]
 
 
 def startAPI():
     headers = {
-        'X-Auth-Token': '425b30bcc4f317427919a0d1f1f4963e',
+        'X-Auth-Token': 'ee71e3af93f8e0856b96e2426d744604',
         'Content-Type': 'application/json',
     }
 
@@ -73,6 +72,7 @@ def locationAPI(Auth_key):
     loc_data = response.json()
     loc_json = json.loads(json.dumps(loc_data))
     location = loc_json.get("locations")
+
     #print(location)
     return location
 
@@ -108,27 +108,6 @@ def mapId(N):
             idxM[idx].x = j
             idx = idx+1
 
-
-def SimulateAPI(Auth_key,trucks):
-    headers = {
-        'Authorization': Auth_key,
-        'Content-Type': 'application/json',
-    }
-    data = '{ "commands": [ { "truck_id": 0, "command": [2, 5, 4, 1, 6] }] }'
-    while 1 :
-        response = requests.put(URL+'/simulate', headers=headers, data=data)
-        sim_data = response.json()
-        sim_json = json.loads(json.dumps(sim_data))
-        simulate = Simulate(
-            sim_json.get('status'),
-            sim_json.get('time'),
-            sim_json.get('failed_requests_count'),
-            sim_json.get('distance')
-        )
-        if simulate.status == "finished":
-            return simulate
-
-
 def ScoreAPI(Auth_key):
     headers = {
         'Authorization': Auth_key,
@@ -154,40 +133,71 @@ def LandAPI():
     land = land_json.get("")
     return land
 
-
+def SimulateAPI(Auth_key,trucks,command):
+    headers = {
+        'Authorization': Auth_key,
+        'Content-Type': 'application/json',
+    }
+    data = json.dumps(command)
+    response = requests.put(URL+'/simulate', headers=headers, data=data)
+    sim_data = response.json()
+    sim_json = json.loads(json.dumps(sim_data))
+    simulate = Simulate(
+        sim_json.get('status'),
+        sim_json.get('time'),
+        sim_json.get('failed_requests_count'),
+        sim_json.get('distance')
+    )
+    return simulate.status
 
 # ---Main---
-# 알고리즘 1 => 신청이 들어올때 이동 거리만큼 미리가서 자전거를 놓는다.
+# 알고리즘 1 => # 가장 적은 곳으로 이동 하면서 중간에 자전거가 avg보다 많을 경우 태워서 간다.
 
-bicycle = [[4 for i in range(MAX)] for j in range(MAX)]
-
+# 인증키
 Auth_key = startAPI()
 
-# 위치 정보 저장
+# 위치 정보 
 location = locationAPI(Auth_key)
 
-# 트럭 위치 저장
-trucksTmp = TrucksAPI(Auth_key)
+# 트럭 위치 
+trucks= TrucksAPI(Auth_key)
 
-# 빌리는 내역 저장
-land = LandAPI()
+# # 빌리는 내역 
+# land = LandAPI()
 
 # mapId 설정
 mapId(MAX)
 
-# 트럭 정보 위치랑 맵핑
-trucks = []
-for tr in trucksTmp:
-    tmp = truck()
-    tmp.time = 0
-    tmp.idx = tr['location_id']
-    tmp.y = idxM[tmp.idx].y
-    tmp.x = idxM[tmp.idx].x
-    trucks.append(tmp)
-
 # 시뮬
-SimulateAPI(Auth_key)
-
+data = dict()
+#SimulateAPI(Auth_key,trucks,data)
+while 1:
+    for i in range(MAX*MAX):
+        # 트럭 vst
+        vstT = [0 for i in range(MAX*MAX)]
+        id = location[i].get('id')
+        count = location[i].get('located_bikes_count')
+        # 만약에 평균보다 많을 경우 자전거를 싣으로 가고
+        if count > AVG:
+            command = dict()
+            trucks= TrucksAPI(Auth_key)
+        # 평균 보다 적을 경우 가장 자전거를 많이 싣고있는 트럭을 지정해 avg만큼 채우러 간다.
+        if(count < AVG):
+            mx = 0
+            for tr in trucks:
+                if vstT[tr['idx']] == 1:
+                    continue
+                truckCount = location[tr['location_id']].get('located_bikes_count')
+                truckId = 0
+                # 지정
+                if mx <= truckCount:
+                    truckId = tr['location_id']
+                    mx = truckCount
+            #이동
+            mnP = pos(idxM[id])
+            mxP = pos(idxM[truckId]) 
+            
+            # data["commands"] = command
 # 스코어
 print(ScoreAPI(Auth_key))
 
