@@ -5,7 +5,7 @@ import json
 MAX = 5
 MMAX = 10000
 INF = 99999
-AVG = 5
+AVG = 4
 problemURL = "https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/competition-imgs/2021kakao/problem1_day-1.json"
 # 만약에 자전거를 빌려야하는데 자전거가 없다
 
@@ -47,7 +47,7 @@ mp = [[0 for i in range(MAX)] for j in range(MAX)]
 
 def startAPI():
     headers = {
-        'X-Auth-Token': 'ee71e3af93f8e0856b96e2426d744604',
+        'X-Auth-Token': '9e2c5a8a6701cadf1af6343b5f93a17f',
         'Content-Type': 'application/json',
     }
 
@@ -93,19 +93,14 @@ def TrucksAPI(Auth_key):
 def DoNothing(time, y, x):
     return time+6, y, x
 
-
-def move(time, y, x, dir):
-    return time+6, y+dy[dir], x+dx[dir]
-
-
 def mapId(N):
     # 새로 방향으로 올라가므로
     idx = 0
     for i in range(N):
         for j in range(N):
-            mp[j][i] = idx
-            idxM[idx].y = i
-            idxM[idx].x = j
+            mp[i][j] = idx
+            idxM[idx].x = i
+            idxM[idx].y = j
             idx = idx+1
 
 def ScoreAPI(Auth_key):
@@ -142,6 +137,8 @@ def SimulateAPI(Auth_key,trucks,command):
     response = requests.put(URL+'/simulate', headers=headers, data=data)
     sim_data = response.json()
     sim_json = json.loads(json.dumps(sim_data))
+    location = locationAPI(Auth_key)
+    trucks= TrucksAPI(Auth_key)
     simulate = Simulate(
         sim_json.get('status'),
         sim_json.get('time'),
@@ -149,18 +146,43 @@ def SimulateAPI(Auth_key,trucks,command):
         sim_json.get('distance')
     )
     return simulate.status
-
+def move(fr = pos(),to = pos(),w = 0,id = 0):
+    commandO = dict()
+    cmd = list()
+    #상차
+    if w > 0:
+        for i in range(w):
+            cmd.append(5)
+    # X축 이동(이동 하려는 위치가 오른쪽에 있는 경우)
+    if fr.x < to.x:
+        for i in range(to.x - fr.x):
+            cmd.append(2)
+    # X축 이동(이동 하려는 위치가 왼쪽에 있는 경우)
+    if fr.x > to.x:
+        for i in range(fr.x - to.x):
+            cmd.append(4)
+    # Y축 이동(이동 하려는 위치가 위에 있는 경우)
+    if fr.y < to.y:
+        for i in range(to.y - fr.y):
+            cmd.append(1)
+    # Y축 이동(이동 하려는 위치가 아래에 있는 경우)
+    if fr.y > to.y:
+        for i in range(fr.y - to.y):
+            cmd.append(3)    
+    #하차하는 경우
+    if w < 0:
+        for i in range(-w):
+            cmd.append(6)
+    
+    commandO["truck_id"] = id
+    commandO["command"] = cmd
+    return commandO
 # ---Main---
 # 알고리즘 1 => # 가장 적은 곳으로 이동 하면서 중간에 자전거가 avg보다 많을 경우 태워서 간다.
 
 # 인증키
 Auth_key = startAPI()
 
-# 위치 정보 
-location = locationAPI(Auth_key)
-
-# 트럭 위치 
-trucks= TrucksAPI(Auth_key)
 
 # # 빌리는 내역 
 # land = LandAPI()
@@ -169,35 +191,59 @@ trucks= TrucksAPI(Auth_key)
 mapId(MAX)
 
 # 시뮬
-data = dict()
-#SimulateAPI(Auth_key,trucks,data)
+data = {'commands' : {}}
 while 1:
+    a_list = []
+    # 위치 정보 
+    location = locationAPI(Auth_key)
+    # 트럭 위치 
+    trucks= TrucksAPI(Auth_key)
+    # 트럭 vst
+    vstT = [0 for i in range(MAX*MAX)]
     for i in range(MAX*MAX):
-        # 트럭 vst
-        vstT = [0 for i in range(MAX*MAX)]
         id = location[i].get('id')
         count = location[i].get('located_bikes_count')
-        # 만약에 평균보다 많을 경우 자전거를 싣으로 가고
+        command = dict()
+        truckId = 0
+        diff = 0
+        # 만약에 평균보다 많을 경우 상차
         if count > AVG:
-            command = dict()
-            trucks= TrucksAPI(Auth_key)
-        # 평균 보다 적을 경우 가장 자전거를 많이 싣고있는 트럭을 지정해 avg만큼 채우러 간다.
-        if(count < AVG):
-            mx = 0
+            trucks = TrucksAPI(Auth_key)
+            mn = INF
             for tr in trucks:
-                if vstT[tr['idx']] == 1:
+                if vstT[tr['id']] == True:
                     continue
-                truckCount = location[tr['location_id']].get('located_bikes_count')
-                truckId = 0
+                truckCount = tr['loaded_bikes_count']
                 # 지정
-                if mx <= truckCount:
+                if mn > truckCount:
+                    truckId = tr['location_id']
+                    mn = truckCount
+                    diff = count - AVG;
+            vstT[truckId] = True
+        # 평균 보다 적을 경우 하차
+        if count < AVG:
+            mx = -1
+            for tr in trucks:
+                if vstT[tr['id']] == True:
+                    continue
+                truckCount = tr['loaded_bikes_count']
+                # 지정
+                if mx < truckCount:
                     truckId = tr['location_id']
                     mx = truckCount
-            #이동
-            mnP = pos(idxM[id])
-            mxP = pos(idxM[truckId]) 
-            
-            # data["commands"] = command
+                    diff = count - AVG
+            vstT[truckId] = True
+        #이동
+        fr = pos()
+        fr = idxM[truckId]
+        to = pos()
+        to = idxM[id] 
+        if diff == 0: 
+            continue
+        command = move(fr,to,diff,truckId)
+        a_list.append(command)
+    data["commands"] = a_list
+    SimulateAPI(Auth_key,trucks,data)
 # 스코어
 print(ScoreAPI(Auth_key))
 
