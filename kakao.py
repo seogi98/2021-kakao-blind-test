@@ -5,7 +5,7 @@ import json
 MAX = 5
 MMAX = 10000
 INF = 99999
-AVG = 4
+AVG = 3
 problemURL = "https://grepp-cloudfront.s3.ap-northeast-2.amazonaws.com/programmers_imgs/competition-imgs/2021kakao/problem1_day-1.json"
 # 만약에 자전거를 빌려야하는데 자전거가 없다
 
@@ -47,7 +47,7 @@ mp = [[0 for i in range(MAX)] for j in range(MAX)]
 
 def startAPI():
     headers = {
-        'X-Auth-Token': '9e2c5a8a6701cadf1af6343b5f93a17f',
+        'X-Auth-Token': '44a1628476646f2b19b8e0d54663382e',
         'Content-Type': 'application/json',
     }
 
@@ -145,9 +145,10 @@ def SimulateAPI(Auth_key,trucks,command):
         sim_json.get('failed_requests_count'),
         sim_json.get('distance')
     )
+    #print(location)
     return simulate.status
 def move(fr = pos(),to = pos(),w = 0,id = 0):
-    commandO = dict()
+    commandO = dict()           
     cmd = list()
     #상차
     if w > 0:
@@ -200,8 +201,10 @@ while 1:
     trucks= TrucksAPI(Auth_key)
     # 트럭 vst
     vstT = [0 for i in range(MAX*MAX)]
+    # 위치 vst
+    vst = [0 for i in range(MAX*MAX)]
     for i in range(MAX*MAX):
-        id = location[i].get('id')
+        id = i
         count = location[i].get('located_bikes_count')
         command = dict()
         truckId = 0
@@ -216,12 +219,12 @@ while 1:
                 truckCount = tr['loaded_bikes_count']
                 # 지정
                 if mn > truckCount:
-                    truckId = tr['location_id']
+                    truckId = tr['id']
                     mn = truckCount
                     diff = count - AVG;
             vstT[truckId] = True
         # 평균 보다 적을 경우 하차
-        if count < AVG:
+        elif count < AVG:
             mx = -1
             for tr in trucks:
                 if vstT[tr['id']] == True:
@@ -229,21 +232,22 @@ while 1:
                 truckCount = tr['loaded_bikes_count']
                 # 지정
                 if mx < truckCount:
-                    truckId = tr['location_id']
+                    truckId = tr['id']
                     mx = truckCount
                     diff = count - AVG
             vstT[truckId] = True
         #이동
         fr = pos()
-        fr = idxM[truckId]
+        fr = idxM[trucks[truckId]['location_id']]
         to = pos()
         to = idxM[id] 
-        if diff == 0: 
+        if diff == 0:  
             continue
         command = move(fr,to,diff,truckId)
         a_list.append(command)
     data["commands"] = a_list
-    SimulateAPI(Auth_key,trucks,data)
+    if SimulateAPI(Auth_key,trucks,data) == "finished":
+        break
 # 스코어
 print(ScoreAPI(Auth_key))
 
